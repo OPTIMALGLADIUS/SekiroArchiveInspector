@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -351,7 +352,8 @@ internal static class Program
 
             Directory.CreateDirectory(textureDir);
 
-            var textureReports = new System.Collections.Generic.List<object>();
+            var textureReports =
+                new System.Collections.Generic.List<object>();
 
             int index = 0;
 
@@ -383,8 +385,20 @@ internal static class Program
                     outputBytes = texture.Bytes;
                     extension = ".bin";
                     headerized = false;
+
                     headerizeError =
                         $"{ex.GetType().Name}: {ex.Message}";
+                }
+
+                // Parse the DDS header directly instead of relying on
+                // texture.Header, which may be null for these textures.
+                DdsInfo ddsInfo = null;
+
+                if (extension.Equals(
+                        ".dds",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    ddsInfo = ParseDds(outputBytes);
                 }
 
                 string fileName =
@@ -401,20 +415,42 @@ internal static class Program
                     Index = index,
                     Name = texture.Name,
                     File = fileName,
+
                     OriginalByteLength = texture.Bytes.Length,
                     OutputByteLength = outputBytes.Length,
-                    OutputFormat = extension.TrimStart('.').ToUpperInvariant(),
+
+                    OutputFormat =
+                        extension.TrimStart('.').ToUpperInvariant(),
+
                     Headerized = headerized,
                     HeaderizeError = headerizeError,
+
                     Platform = texture.Platform.ToString(),
                     Format = texture.Format,
                     Type = texture.Type.ToString(),
                     Mipmaps = texture.Mipmaps,
                     Flags1 = texture.Flags1,
-                    Width = texture.Header?.Width,
-                    Height = texture.Header?.Height,
-                    TextureCount = texture.Header?.TextureCount,
-                    DXGIFormat = texture.Header?.DXGIFormat
+
+                    // Metadata parsed from the generated DDS file.
+                    Width = ddsInfo?.Width,
+                    Height = ddsInfo?.Height,
+                    MipMapCount = ddsInfo?.MipMapCount,
+                    FourCC = ddsInfo?.FourCC,
+                    DXGIFormat = ddsInfo?.DxgiFormat,
+                    FormatName = ddsInfo?.FormatName,
+
+                    DdsHeaderValid = ddsInfo?.IsValid ?? false,
+                    DdsValidationMessage =
+                        ddsInfo?.ValidationMessage,
+
+                    // Preserve the previous SoulsFormats header fields
+                    // as supplemental information for comparison.
+                    SourceHeaderWidth = texture.Header?.Width,
+                    SourceHeaderHeight = texture.Header?.Height,
+                    SourceHeaderTextureCount =
+                        texture.Header?.TextureCount,
+                    SourceHeaderDXGIFormat =
+                        texture.Header?.DXGIFormat
                 });
 
                 Console.WriteLine(
@@ -424,12 +460,22 @@ internal static class Program
                     $"Mipmaps={texture.Mipmaps} | " +
                     $"Output={extension} | " +
                     $"Bytes={outputBytes.Length:N0}" +
-                    (headerized ? "" : " | Headerize failed; saved raw bytes"));
+                    (headerized
+                        ? ""
+                        : " | Headerize failed; saved raw bytes"));
 
                 if (!headerized)
                 {
                     Console.Error.WriteLine(
                         $"  Headerize error: {headerizeError}");
+                }
+                else if (ddsInfo != null)
+                {
+                    Console.WriteLine(
+                        $"  DDS: {ddsInfo.Width}x{ddsInfo.Height} | " +
+                        $"Mips={ddsInfo.MipMapCount} | " +
+                        $"Format={ddsInfo.FormatName} | " +
+                        $"Valid={ddsInfo.IsValid}");
                 }
 
                 index++;
@@ -439,14 +485,19 @@ internal static class Program
             {
                 InputFile = inputPath,
                 InputSize = dcxBytes.Length,
+
                 CompressionType = compression.Type.ToString(),
+
                 DecompressedTpfPath = tpfPath,
                 DecompressedTpfSize = tpfBytes.Length,
+
                 TpfPlatform = tpf.Platform.ToString(),
                 TpfEncoding = tpf.Encoding,
                 TpfFlag2 = tpf.Flag2,
+
                 TextureCount = tpf.Textures.Count,
                 TextureOutputDirectory = textureDir,
+
                 Textures = textureReports
             };
 
@@ -481,6 +532,218 @@ internal static class Program
 
             return 1;
         }
+    }
+
+    // ------------------------------------------------------------
+    // DDS header parsing
+    //
+    // Standard DDS layout:
+    //   0-3     Magic "DDS "
+    //   4-127   DDS_HEADER
+    //   128+    Optional DDS_HEADER_DXT10
+    //
+    // This validates the header structure and extracts metadata.
+    // It does not fully decode or validate the texture payload.
+    // ------------------------------------------------------------
+
+    private sealed class DdsInfo
+    {
+        public bool IsValid { get; set; }
+
+        public string ValidationMessage { get; set; } = "";
+
+        public int? Width { get; set; }
+
+        public int? Height { get; set; }
+
+        public int? MipMapCount { get; set; }
+
+        public string FourCC { get; set; }
+
+        public uint? DxgiFormat { get; set; }
+
+        public string FormatName { get; set; }
+    }
+
+    private static DdsInfo ParseDds(byte[] data)
+    {
+        var info = new DdsInfo();
+
+        if (data == null || data.Length < 128)
+        {
+            info.ValidationMessage =
+                "DDS data is shorter than 128 bytes.";
+
+            return info;
+        }
+
+        // DDS magic.
+        if (data[0] != (byte)'D' ||
+            data[1] != (byte)'D' ||
+            data[2] != (byte)'S' ||
+            data[3] != (byte)' ')
+        {
+            info.ValidationMessage =
+                "DDS magic is missing.";
+
+            return info;
+        }
+
+        uint headerSize =
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                data.AsSpan(4, 4));
+
+        if (headerSize != 124)
+        {
+            info.ValidationMessage =
+                $"Unexpected DDS_HEADER size: {headerSize}.";
+
+            return info;
+        }
+
+        uint height =
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                data.AsSpan(12, 4));
+
+        uint width =
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                data.AsSpan(16, 4));
+
+        uint mipMapCount =
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                data.AsSpan(28, 4));
+
+        uint pixelFormatSize =
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                data.AsSpan(76, 4));
+
+        uint pixelFormatFlags =
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                data.AsSpan(80, 4));
+
+        uint fourCCValue =
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                data.AsSpan(84, 4));
+
+        if (pixelFormatSize != 32)
+        {
+            info.ValidationMessage =
+                $"Unexpected DDS_PIXELFORMAT size: {pixelFormatSize}.";
+
+            return info;
+        }
+
+        if (width > int.MaxValue || height > int.MaxValue)
+        {
+            info.ValidationMessage =
+                "DDS dimensions exceed supported integer range.";
+
+            return info;
+        }
+
+        info.Width = (int)width;
+        info.Height = (int)height;
+
+        info.MipMapCount =
+            (int)Math.Max(1u, mipMapCount);
+
+        // DDPF_FOURCC = 0x4.
+        if ((pixelFormatFlags & 0x4) != 0)
+        {
+            info.FourCC = new string(new[]
+            {
+                (char)(fourCCValue & 0xFF),
+                (char)((fourCCValue >> 8) & 0xFF),
+                (char)((fourCCValue >> 16) & 0xFF),
+                (char)((fourCCValue >> 24) & 0xFF)
+            });
+
+            if (info.FourCC == "DX10")
+            {
+                // DDS_HEADER_DXT10 is 20 bytes and begins at offset 128.
+                if (data.Length < 148)
+                {
+                    info.ValidationMessage =
+                        "DDS uses DX10 format but its extended header is incomplete.";
+
+                    return info;
+                }
+
+                uint dxgiFormat =
+                    BinaryPrimitives.ReadUInt32LittleEndian(
+                        data.AsSpan(128, 4));
+
+                info.DxgiFormat = dxgiFormat;
+                info.FormatName = GetDxgiFormatName(dxgiFormat);
+            }
+            else
+            {
+                info.FormatName = info.FourCC switch
+                {
+                    "DXT1" => "BC1",
+                    "DXT2" => "BC2 premultiplied",
+                    "DXT3" => "BC2",
+                    "DXT4" => "BC3 premultiplied",
+                    "DXT5" => "BC3",
+                    "ATI1" => "BC4",
+                    "BC4U" => "BC4 UNORM",
+                    "BC4S" => "BC4 SNORM",
+                    "ATI2" => "BC5",
+                    "BC5U" => "BC5 UNORM",
+                    "BC5S" => "BC5 SNORM",
+                    _ => $"FourCC {info.FourCC}"
+                };
+            }
+        }
+        else
+        {
+            info.FormatName = "Uncompressed DDS";
+        }
+
+        info.IsValid =
+            width > 0 &&
+            height > 0;
+
+        info.ValidationMessage = info.IsValid
+            ? "DDS header is structurally valid."
+            : "DDS dimensions are invalid.";
+
+        return info;
+    }
+
+    private static string GetDxgiFormatName(uint format)
+    {
+        return format switch
+        {
+            2  => "R32G32B32A32_FLOAT",
+            10 => "R16G16B16A16_FLOAT",
+            11 => "R16G16B16A16_UNORM",
+            28 => "R8G8B8A8_UNORM",
+            29 => "R8G8B8A8_UNORM_SRGB",
+            49 => "R8G8_UNORM",
+            61 => "R8_UNORM",
+
+            71 => "BC1_UNORM",
+            72 => "BC1_UNORM_SRGB",
+            74 => "BC2_UNORM",
+            75 => "BC2_UNORM_SRGB",
+            77 => "BC3_UNORM",
+            78 => "BC3_UNORM_SRGB",
+            80 => "BC4_UNORM",
+            81 => "BC4_SNORM",
+            83 => "BC5_UNORM",
+            84 => "BC5_SNORM",
+
+            87 => "B8G8R8A8_UNORM",
+            88 => "B8G8R8X8_UNORM",
+
+            95 => "BC6H_UF16",
+            96 => "BC6H_SF16",
+            98 => "BC7_UNORM",
+            99 => "BC7_UNORM_SRGB",
+
+            _ => $"Unknown DXGI format ({format})"
+        };
     }
 
     // ------------------------------------------------------------
