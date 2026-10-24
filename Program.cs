@@ -359,23 +359,53 @@ internal static class Program
             {
                 string safeName = MakeSafeFileName(texture.Name);
 
+                // Headerize converts supported texture payloads into a
+                // standard DDS file, including rebuilding platform-specific
+                // layouts where Headerizer supports them. Some payloads are
+                // already DDS/GNF/XTX; Headerizer identifies those too.
+                byte[] outputBytes;
+                string extension;
+                bool headerized;
+                string headerizeError = null;
+
+                try
+                {
+                    outputBytes = Headerizer.Headerize(
+                        texture,
+                        out extension);
+
+                    headerized = true;
+                }
+                catch (Exception ex)
+                {
+                    // Do not abort the entire TPF because one texture is
+                    // unsupported or malformed. Preserve its original bytes.
+                    outputBytes = texture.Bytes;
+                    extension = ".bin";
+                    headerized = false;
+                    headerizeError =
+                        $"{ex.GetType().Name}: {ex.Message}";
+                }
+
                 string fileName =
-                    $"{index:D4}_{safeName}.bin";
+                    $"{index:D4}_{safeName}{extension}";
 
                 string texturePath = Path.Combine(
                     textureDir,
                     fileName);
 
-                File.WriteAllBytes(
-                    texturePath,
-                    texture.Bytes);
+                File.WriteAllBytes(texturePath, outputBytes);
 
                 textureReports.Add(new
                 {
                     Index = index,
                     Name = texture.Name,
                     File = fileName,
-                    ByteLength = texture.Bytes.Length,
+                    OriginalByteLength = texture.Bytes.Length,
+                    OutputByteLength = outputBytes.Length,
+                    OutputFormat = extension.TrimStart('.').ToUpperInvariant(),
+                    Headerized = headerized,
+                    HeaderizeError = headerizeError,
                     Platform = texture.Platform.ToString(),
                     Format = texture.Format,
                     Type = texture.Type.ToString(),
@@ -392,7 +422,15 @@ internal static class Program
                     $"Format={texture.Format} | " +
                     $"Type={texture.Type} | " +
                     $"Mipmaps={texture.Mipmaps} | " +
-                    $"Bytes={texture.Bytes.Length:N0}");
+                    $"Output={extension} | " +
+                    $"Bytes={outputBytes.Length:N0}" +
+                    (headerized ? "" : " | Headerize failed; saved raw bytes"));
+
+                if (!headerized)
+                {
+                    Console.Error.WriteLine(
+                        $"  Headerize error: {headerizeError}");
+                }
 
                 index++;
             }
