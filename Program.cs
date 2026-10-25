@@ -27,6 +27,44 @@ internal static class Program
         return RunMapping(args);
     }
 
+    // Helper methods
+
+    private static void PrintExceptionDetails(
+	    Exception ex,
+    	int depth = 0)
+	{
+    	string indent = new string(' ', depth * 2);
+
+	    Console.Error.WriteLine(
+	        $"{indent}{ex.GetType().FullName}: {ex.Message}");
+
+    	if (!string.IsNullOrWhiteSpace(ex.StackTrace))
+    	{
+	        Console.Error.WriteLine($"{indent}Stack trace:");
+    	    Console.Error.WriteLine(ex.StackTrace);
+	    }
+
+    	if (ex is AggregateException aggregate)
+	    {
+    	    foreach (Exception inner in aggregate.InnerExceptions)
+        	{
+            	Console.Error.WriteLine(
+                	$"{indent}Inner exception:");
+
+	            PrintExceptionDetails(inner, depth + 1);
+    	    }
+	    }
+    	else if (ex.InnerException != null)
+    	{
+        	Console.Error.WriteLine(
+            	$"{indent}Inner exception:");
+
+	        PrintExceptionDetails(
+    	        ex.InnerException,
+        	    depth + 1);
+	    }
+	}
+
     // ------------------------------------------------------------
     // Original TSV mapping mode
     // Usage:
@@ -303,10 +341,26 @@ internal static class Program
                 return 1;
             }
 
-            // Actual SoulsFormatsNEXT API from the supplied DCX.cs.
-            byte[] tpfBytes = DCX.Decompress(
-                dcxBytes,
-                out DCX.CompressionInfo compression);
+			// Explicitly add the Inspector's output directory to Oodle's
+			// search paths before DCX decompression triggers Oodle.Default.
+			string oodleDirectory = AppContext.BaseDirectory;
+
+			if (!Oodle.SearchPaths.Contains(
+			        oodleDirectory,
+			        StringComparer.OrdinalIgnoreCase))
+			{
+			    Oodle.SearchPaths.Add(oodleDirectory);
+			}
+
+			Console.WriteLine($"Oodle search directory: {oodleDirectory}");
+			Console.WriteLine(
+			    $"Oodle DLL exists: " +
+			    $"{File.Exists(Path.Combine(oodleDirectory, "oo2core_6_win64.dll"))}");
+
+			// Actual SoulsFormatsNEXT API from DCX.cs.
+			byte[] tpfBytes = DCX.Decompress(
+			    dcxBytes,
+			    out DCX.CompressionInfo compression);
 
             Console.WriteLine(
                 $"DCX compression type: {compression.Type}");
@@ -524,14 +578,12 @@ internal static class Program
             return 0;
         }
         catch (Exception ex)
-        {
-            Console.Error.WriteLine(
-                $"{ex.GetType().Name}: {ex.Message}");
+		{
+		    Console.Error.WriteLine("TPF extraction failed:");
+		    PrintExceptionDetails(ex);
 
-            Console.Error.WriteLine(ex.StackTrace);
-
-            return 1;
-        }
+		    return 1;
+		}
     }
 
     // ------------------------------------------------------------
