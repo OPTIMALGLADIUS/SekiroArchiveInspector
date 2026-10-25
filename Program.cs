@@ -13,19 +13,39 @@ internal static class Program
     private const string DefaultDictionaryPath =
         "../UXM-Selective-Unpack/UXM/res/SekiroDictionary.txt";
 
-    private static int Main(string[] args)
-    {
-        if (args.Length > 0)
-        {
-            if (args[0].Equals("--extract", StringComparison.OrdinalIgnoreCase))
-                return RunExtraction(args);
+	private static int Main(string[] args)
+	{
+    	try
+	    {
+    	    ConfigureOodle();
+	    }
+    	catch (Exception ex)
+	    {
+    	    Console.Error.WriteLine(
+        	    $"Oodle configuration failed: {ex.Message}");
 
-            if (args[0].Equals("--extract-tpf", StringComparison.OrdinalIgnoreCase))
-                return RunTpfExtraction(args);
-        }
+	        return 1;
+    	}
 
-        return RunMapping(args);
-    }
+	    if (args.Length > 0)
+    	{
+        	if (args[0].Equals(
+            	    "--extract",
+                	StringComparison.OrdinalIgnoreCase))
+	        {
+    	        return RunExtraction(args);
+        	}
+
+	        if (args[0].Equals(
+    	            "--extract-tpf",
+        	        StringComparison.OrdinalIgnoreCase))
+        	{
+            	return RunTpfExtraction(args);
+        	}
+	    }
+
+    	return RunMapping(args);
+	}
 
     // Helper methods
 
@@ -63,6 +83,71 @@ internal static class Program
     	        ex.InnerException,
         	    depth + 1);
 	    }
+	}
+
+	//--------------------------ODDLE2 core work-------------------
+
+	private static void ConfigureOodle()
+	{
+    	// Oodle DLLs may be placed beside the application or in a
+	    // dedicated native-library directory.
+    	string baseDirectory = AppContext.BaseDirectory;
+
+	    string[] candidateDirectories =
+    	{
+	        baseDirectory,
+	        Path.Combine(baseDirectory, "native"),
+    	    Path.Combine(baseDirectory, "runtimes", "win-x64", "native"),
+	        Environment.CurrentDirectory
+    	};
+
+	    // Optional override for GitHub Actions or local testing.
+    	string? environmentPath =
+        	Environment.GetEnvironmentVariable("OODLE_PATH");
+
+	    if (!string.IsNullOrWhiteSpace(environmentPath))
+    	{
+        	candidateDirectories = candidateDirectories
+            	.Prepend(environmentPath)
+	            .ToArray();
+    	}
+
+	    foreach (string directory in candidateDirectories)
+    	{
+        	if (!Directory.Exists(directory))
+            	continue;
+
+	        string fullPath = Path.GetFullPath(directory);
+
+    	    if (!Oodle.SearchPaths.Contains(
+        	        fullPath,
+            	    StringComparer.OrdinalIgnoreCase))
+	        {
+    	        Oodle.SearchPaths.Add(fullPath);
+        	}
+	    }
+
+    	Console.WriteLine("Configured Oodle search paths:");
+
+	    foreach (string path in Oodle.SearchPaths)
+    	{
+        	Console.WriteLine($"  {path}");
+
+	        foreach (string dllName in new[]
+    	    {
+        	    "oo2core_9_win64.dll",
+            	"oo2core_8_win64.dll",
+	            "oo2core_6_win64.dll"
+    	    })
+        	{
+            	string dllPath = Path.Combine(path, dllName);
+
+	            if (File.Exists(dllPath))
+    	        {
+        	        Console.WriteLine($"    Found: {dllName}");
+            	}
+	        }
+    	}
 	}
 
     // ------------------------------------------------------------
@@ -340,22 +425,6 @@ internal static class Program
 
                 return 1;
             }
-
-			// Explicitly add the Inspector's output directory to Oodle's
-			// search paths before DCX decompression triggers Oodle.Default.
-			string oodleDirectory = AppContext.BaseDirectory;
-
-			if (!Oodle.SearchPaths.Contains(
-			        oodleDirectory,
-			        StringComparer.OrdinalIgnoreCase))
-			{
-			    Oodle.SearchPaths.Add(oodleDirectory);
-			}
-
-			Console.WriteLine($"Oodle search directory: {oodleDirectory}");
-			Console.WriteLine(
-			    $"Oodle DLL exists: " +
-			    $"{File.Exists(Path.Combine(oodleDirectory, "oo2core_6_win64.dll"))}");
 
 			// Actual SoulsFormatsNEXT API from DCX.cs.
 			byte[] tpfBytes = DCX.Decompress(

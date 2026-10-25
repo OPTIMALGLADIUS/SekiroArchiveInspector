@@ -16,12 +16,17 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="../UXM-Selective-Unpack/UXM/ArchiveKeys.cs"
+    <Compile Include="..\UXM-Selective-Unpack\UXM\ArchiveKeys.cs"
            Link="ArchiveKeys.cs" />
-    <Compile Include="../UXM-Selective-Unpack/UXM/CryptographyUtility.cs"
+    <Compile Include="..\UXM-Selective-Unpack\UXM\CryptographyUtility.cs"
            Link="CryptographyUtility.cs" />
-    <Compile Include="../UXM-Selective-Unpack/UXM/ArchiveDictionary.cs"
+    <Compile Include="..\UXM-Selective-Unpack\UXM\ArchiveDictionary.cs"
          Link="ArchiveDictionary.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\Sekiro\oo2core_6_win64.dll"
+           CopyToOutputDirectory="output" />
   </ItemGroup>
 
 </Project>
