@@ -26,7 +26,7 @@
 
   <ItemGroup>
     <Content Include="..\Sekiro\oo2core_6_win64.dll">
-           <CopyToOutputDirectory>="PreserveNewest"</CopyToOutputDirectory>
+           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
