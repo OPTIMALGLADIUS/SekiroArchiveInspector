@@ -8,7 +8,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
+    <PackageReference Include="BouncyCastle.Cryptography"
+                      Version="2.4.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,16 +18,18 @@
 
   <ItemGroup>
     <Compile Include="..\UXM-Selective-Unpack\UXM\ArchiveKeys.cs"
-           Link="ArchiveKeys.cs" />
+             Link="ArchiveKeys.cs" />
+
     <Compile Include="..\UXM-Selective-Unpack\UXM\CryptographyUtility.cs"
-           Link="CryptographyUtility.cs" />
+             Link="CryptographyUtility.cs" />
+
     <Compile Include="..\UXM-Selective-Unpack\UXM\ArchiveDictionary.cs"
-         Link="ArchiveDictionary.cs" />
+             Link="ArchiveDictionary.cs" />
   </ItemGroup>
 
   <ItemGroup>
     <Content Include="..\Sekiro\oo2core_6_win64.dll">
-           <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
 
