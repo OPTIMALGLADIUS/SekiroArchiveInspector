@@ -1,3 +1,5 @@
+using SekiroArchiveInspector.Classification;
+
 public sealed class ExtractedAsset
 {
     public required string FilePath { get; init; }

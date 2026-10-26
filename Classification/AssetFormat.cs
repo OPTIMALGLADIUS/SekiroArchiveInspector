@@ -1,13 +1,24 @@
-namespace SekiroArchiveInspector.Classification;
-
 public enum AssetFormat
 {
     Unknown,
+
+    // Compression / container formats
     DCX,
-    DDS,
+    BND,
+    BHD,
+    BDT,
+
+    // Texture formats
     TPF,
-    Binder,
+    DDS,
+
+    // Other asset formats
     FLVER,
-    TAE,
-    HKX
+    FLVER2,
+    FFX,
+    FMG,
+    FSB,
+
+    // Generic binary data
+    Binary
 }
