@@ -13,145 +13,156 @@ internal static class Program
     private const string DefaultDictionaryPath =
         "../UXM-Selective-Unpack/UXM/res/SekiroDictionary.txt";
 
-	private static int Main(string[] args)
-	{
-    	try
-	    {
-    	    ConfigureOodle();
-	    }
-    	catch (Exception ex)
-	    {
-    	    Console.Error.WriteLine(
-        	    $"Oodle configuration failed: {ex.Message}");
+    private static int Main(string[] args)
+    {
+        try
+        {
+            ConfigureOodle();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                $"Oodle configuration failed: {ex.Message}");
 
-	        return 1;
-    	}
+            return 1;
+        }
 
-	    if (args.Length > 0)
-    	{
-        	if (args[0].Equals(
-            	    "--extract",
-                	StringComparison.OrdinalIgnoreCase))
-	        {
-    	        return RunExtraction(args);
-        	}
+        if (args.Length > 0)
+        {
+            if (args[0].Equals(
+                    "--extract",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return RunExtraction(args);
+            }
 
-	        if (args[0].Equals(
-    	            "--extract-tpf",
-        	        StringComparison.OrdinalIgnoreCase))
-        	{
-            	return RunTpfExtraction(args);
-        	}
-	    }
+            if (args[0].Equals(
+                    "--extract-tpf",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return RunTpfExtraction(args);
+            }
 
-    	return RunMapping(args);
-	}
+            if (args[0].Equals(
+                    "--extract-all",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return RunExtractAll(args);
+            }
+        }
 
+        return RunMapping(args);
+    }
+
+    // ------------------------------------------------------------
     // Helper methods
+    // ------------------------------------------------------------
 
     private static void PrintExceptionDetails(
-	    Exception ex,
-    	int depth = 0)
-	{
-    	string indent = new string(' ', depth * 2);
+        Exception ex,
+        int depth = 0)
+    {
+        string indent = new string(' ', depth * 2);
 
-	    Console.Error.WriteLine(
-	        $"{indent}{ex.GetType().FullName}: {ex.Message}");
+        Console.Error.WriteLine(
+            $"{indent}{ex.GetType().FullName}: {ex.Message}");
 
-    	if (!string.IsNullOrWhiteSpace(ex.StackTrace))
-    	{
-	        Console.Error.WriteLine($"{indent}Stack trace:");
-    	    Console.Error.WriteLine(ex.StackTrace);
-	    }
+        if (!string.IsNullOrWhiteSpace(ex.StackTrace))
+        {
+            Console.Error.WriteLine($"{indent}Stack trace:");
+            Console.Error.WriteLine(ex.StackTrace);
+        }
 
-    	if (ex is AggregateException aggregate)
-	    {
-    	    foreach (Exception inner in aggregate.InnerExceptions)
-        	{
-            	Console.Error.WriteLine(
-                	$"{indent}Inner exception:");
+        if (ex is AggregateException aggregate)
+        {
+            foreach (Exception inner in aggregate.InnerExceptions)
+            {
+                Console.Error.WriteLine(
+                    $"{indent}Inner exception:");
 
-	            PrintExceptionDetails(inner, depth + 1);
-    	    }
-	    }
-    	else if (ex.InnerException != null)
-    	{
-        	Console.Error.WriteLine(
-            	$"{indent}Inner exception:");
+                PrintExceptionDetails(inner, depth + 1);
+            }
+        }
+        else if (ex.InnerException != null)
+        {
+            Console.Error.WriteLine(
+                $"{indent}Inner exception:");
 
-	        PrintExceptionDetails(
-    	        ex.InnerException,
-        	    depth + 1);
-	    }
-	}
+            PrintExceptionDetails(
+                ex.InnerException,
+                depth + 1);
+        }
+    }
 
-	//--------------------------ODDLE2 core work-------------------
+    // ------------------------------------------------------------
+    // OODLE configuration
+    // ------------------------------------------------------------
 
-	private static void ConfigureOodle()
-	{
-    	// Oodle DLLs may be placed beside the application or in a
-	    // dedicated native-library directory.
-    	string baseDirectory = AppContext.BaseDirectory;
+    private static void ConfigureOodle()
+    {
+        string baseDirectory = AppContext.BaseDirectory;
 
-	    string[] candidateDirectories =
-    	{
-	        baseDirectory,
-	        Path.Combine(baseDirectory, "native"),
-    	    Path.Combine(baseDirectory, "runtimes", "win-x64", "native"),
-	        Environment.CurrentDirectory
-    	};
+        string[] candidateDirectories =
+        {
+            baseDirectory,
+            Path.Combine(baseDirectory, "native"),
+            Path.Combine(baseDirectory, "runtimes", "win-x64", "native"),
+            Environment.CurrentDirectory
+        };
 
-	    // Optional override for GitHub Actions or local testing.
-    	string? environmentPath =
-        	Environment.GetEnvironmentVariable("OODLE_PATH");
+        string? environmentPath =
+            Environment.GetEnvironmentVariable("OODLE_PATH");
 
-	    if (!string.IsNullOrWhiteSpace(environmentPath))
-    	{
-        	candidateDirectories = candidateDirectories
-            	.Prepend(environmentPath)
-	            .ToArray();
-    	}
+        if (!string.IsNullOrWhiteSpace(environmentPath))
+        {
+            candidateDirectories = candidateDirectories
+                .Prepend(environmentPath)
+                .ToArray();
+        }
 
-	    foreach (string directory in candidateDirectories)
-    	{
-        	if (!Directory.Exists(directory))
-            	continue;
+        foreach (string directory in candidateDirectories)
+        {
+            if (!Directory.Exists(directory))
+            {
+                continue;
+            }
 
-	        string fullPath = Path.GetFullPath(directory);
+            string fullPath = Path.GetFullPath(directory);
 
-    	    if (!Oodle.SearchPaths.Contains(
-        	        fullPath,
-            	    StringComparer.OrdinalIgnoreCase))
-	        {
-    	        Oodle.SearchPaths.Add(fullPath);
-        	}
-	    }
+            if (!Oodle.SearchPaths.Contains(
+                    fullPath,
+                    StringComparer.OrdinalIgnoreCase))
+            {
+                Oodle.SearchPaths.Add(fullPath);
+            }
+        }
 
-    	Console.WriteLine("Configured Oodle search paths:");
+        Console.WriteLine("Configured Oodle search paths:");
 
-	    foreach (string path in Oodle.SearchPaths)
-    	{
-        	Console.WriteLine($"  {path}");
+        foreach (string path in Oodle.SearchPaths)
+        {
+            Console.WriteLine($"  {path}");
 
-	        foreach (string dllName in new[]
-    	    {
-        	    "oo2core_9_win64.dll",
-            	"oo2core_8_win64.dll",
-	            "oo2core_6_win64.dll"
-    	    })
-        	{
-            	string dllPath = Path.Combine(path, dllName);
+            foreach (string dllName in new[]
+            {
+                "oo2core_9_win64.dll",
+                "oo2core_8_win64.dll",
+                "oo2core_6_win64.dll"
+            })
+            {
+                string dllPath = Path.Combine(path, dllName);
 
-	            if (File.Exists(dllPath))
-    	        {
-        	        Console.WriteLine($"    Found: {dllName}");
-            	}
-	        }
-    	}
-	}
+                if (File.Exists(dllPath))
+                {
+                    Console.WriteLine($"    Found: {dllName}");
+                }
+            }
+        }
+    }
 
     // ------------------------------------------------------------
     // Original TSV mapping mode
+    //
     // Usage:
     // dotnet run -- <DataN.bhd> [dictionary.txt]
     // ------------------------------------------------------------
@@ -170,20 +181,28 @@ internal static class Program
             ? Path.GetFullPath(args[1])
             : Path.GetFullPath(DefaultDictionaryPath);
 
-        if (!File.Exists(bhdPath) || !File.Exists(dictionaryPath))
+        if (!File.Exists(bhdPath) ||
+            !File.Exists(dictionaryPath))
         {
-            Console.Error.WriteLine("BHD or dictionary file not found.");
+            Console.Error.WriteLine(
+                "BHD or dictionary file not found.");
+
             Console.Error.WriteLine($"BHD: {bhdPath}");
             Console.Error.WriteLine($"Dictionary: {dictionaryPath}");
+
             return 2;
         }
 
-        string archive = Path.GetFileNameWithoutExtension(bhdPath);
+        string archive =
+            Path.GetFileNameWithoutExtension(bhdPath);
 
-        if (!ArchiveKeys.SekiroKeys.TryGetValue(archive, out string key))
+        if (!ArchiveKeys.SekiroKeys.TryGetValue(
+                archive,
+                out string key))
         {
             Console.Error.WriteLine(
                 $"No Sekiro key found for archive '{archive}'.");
+
             return 2;
         }
 
@@ -214,7 +233,8 @@ internal static class Program
                 foreach (var entry in entries)
                 {
                     if (dictionary.GetPath(
-                            entry.FileNameHash, out string path))
+                            entry.FileNameHash,
+                            out string path))
                     {
                         matched++;
 
@@ -249,7 +269,7 @@ internal static class Program
     }
 
     // ------------------------------------------------------------
-    // Existing BHD5 entry extraction + AES decryption
+    // Targeted BHD5 entry extraction + AES decryption
     //
     // Usage:
     // dotnet run -- --extract <DataN.bhd> <DataN.bdt>
@@ -271,28 +291,38 @@ internal static class Program
 
         if (!File.Exists(bhdPath))
         {
-            Console.Error.WriteLine($"BHD file not found: {bhdPath}");
+            Console.Error.WriteLine(
+                $"BHD file not found: {bhdPath}");
+
             return 2;
         }
 
         if (!File.Exists(bdtPath))
         {
-            Console.Error.WriteLine($"BDT file not found: {bdtPath}");
+            Console.Error.WriteLine(
+                $"BDT file not found: {bdtPath}");
+
             return 2;
         }
 
-        string archive = Path.GetFileNameWithoutExtension(bhdPath);
+        string archive =
+            Path.GetFileNameWithoutExtension(bhdPath);
 
-        if (!ArchiveKeys.SekiroKeys.TryGetValue(archive, out string key))
+        if (!ArchiveKeys.SekiroKeys.TryGetValue(
+                archive,
+                out string key))
         {
             Console.Error.WriteLine(
                 $"No Sekiro key found for archive '{archive}'.");
+
             return 2;
         }
 
         if (!TryParseHash(hashText, out ulong targetHash))
         {
-            Console.Error.WriteLine($"Invalid hexadecimal hash: {hashText}");
+            Console.Error.WriteLine(
+                $"Invalid hexadecimal hash: {hashText}");
+
             return 2;
         }
 
@@ -302,7 +332,8 @@ internal static class Program
 
             var entry = bhd.Buckets
                 .SelectMany(bucket => bucket)
-                .FirstOrDefault(file => file.FileNameHash == targetHash);
+                .FirstOrDefault(
+                    file => file.FileNameHash == targetHash);
 
             if (entry == null)
             {
@@ -318,8 +349,6 @@ internal static class Program
 
             using (FileStream bdtStream = File.OpenRead(bdtPath))
             {
-                // Reads the entry from its BDT offset and applies
-                // AES decryption specified by the BHD metadata.
                 bytes = entry.ReadFile(bdtStream);
             }
 
@@ -366,8 +395,10 @@ internal static class Program
             Console.WriteLine($"Offset: {entry.FileOffset}");
             Console.WriteLine($"Padded size: {entry.PaddedFileSize}");
             Console.WriteLine($"Unpadded size: {entry.UnpaddedFileSize}");
-            Console.WriteLine($"AES metadata present: {entry.AESKey != null}");
-            Console.WriteLine($"AES ranges: {entry.AESKey?.Ranges.Count ?? 0}");
+            Console.WriteLine(
+                $"AES metadata present: {entry.AESKey != null}");
+            Console.WriteLine(
+                $"AES ranges: {entry.AESKey?.Ranges.Count ?? 0}");
             Console.WriteLine($"Output size: {bytes.Length}");
             Console.WriteLine($"First 32 bytes: {firstBytes}");
             Console.WriteLine($"Output: {outputPath}");
@@ -379,6 +410,221 @@ internal static class Program
         {
             Console.Error.WriteLine(
                 $"{ex.GetType().Name}: {ex.Message}");
+
+            return 1;
+        }
+    }
+
+    // ------------------------------------------------------------
+    // Extract every entry in a BHD5 archive
+    //
+    // Usage:
+    // dotnet run -- --extract-all <DataN.bhd> <DataN.bdt>
+    //                            <outputDir>
+    //
+    // The output is raw entry data after the existing ReadFile()
+    // AES decryption behavior. DCX and TPF processing is not done.
+    // ------------------------------------------------------------
+
+    private static int RunExtractAll(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintUsage();
+            return 2;
+        }
+
+        string bhdPath = Path.GetFullPath(args[1]);
+        string bdtPath = Path.GetFullPath(args[2]);
+        string outputDir = Path.GetFullPath(args[3]);
+
+        if (!File.Exists(bhdPath))
+        {
+            Console.Error.WriteLine(
+                $"BHD file not found: {bhdPath}");
+
+            return 2;
+        }
+
+        if (!File.Exists(bdtPath))
+        {
+            Console.Error.WriteLine(
+                $"BDT file not found: {bdtPath}");
+
+            return 2;
+        }
+
+        string archive =
+            Path.GetFileNameWithoutExtension(bhdPath);
+
+        if (!ArchiveKeys.SekiroKeys.TryGetValue(
+                archive,
+                out string key))
+        {
+            Console.Error.WriteLine(
+                $"No Sekiro key found for archive '{archive}'.");
+
+            return 2;
+        }
+
+        try
+        {
+            BHD5 bhd = LoadBhd(bhdPath, key);
+
+            var entries = bhd.Buckets
+                .SelectMany(bucket => bucket)
+                .ToList();
+
+            if (entries.Count == 0)
+            {
+                Console.WriteLine(
+                    $"No entries were found in {archive}.");
+
+                return 0;
+            }
+
+            Directory.CreateDirectory(outputDir);
+
+            string manifestPath = Path.Combine(
+                outputDir,
+                "extraction_manifest.json");
+
+            var manifestEntries =
+                new System.Collections.Generic.List<object>(
+                    entries.Count);
+
+            int succeeded = 0;
+            int failed = 0;
+
+            Console.WriteLine();
+            Console.WriteLine("Full archive extraction");
+            Console.WriteLine($"Archive: {archive}");
+            Console.WriteLine($"BHD: {bhdPath}");
+            Console.WriteLine($"BDT: {bdtPath}");
+            Console.WriteLine($"Output: {outputDir}");
+            Console.WriteLine($"Entries: {entries.Count:N0}");
+            Console.WriteLine();
+
+            using (FileStream bdtStream = File.OpenRead(bdtPath))
+            {
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    BHD5.FileHeader entry = entries[i];
+
+                    string hash =
+                        $"0x{entry.FileNameHash:X8}";
+
+                    string outputFileName =
+                        $"{hash}.bin";
+
+                    string outputPath = Path.Combine(
+                        outputDir,
+                        outputFileName);
+
+                    string status = "Success";
+                    string? error = null;
+                    int actualOutputSize = 0;
+
+                    try
+                    {
+                        // ReadFile reads the padded data and applies
+                        // the AES decryption metadata, if present.
+                        byte[] bytes = entry.ReadFile(bdtStream);
+
+                        // Avoid overwriting an existing file when
+                        // multiple BHD entries share the same hash.
+                        if (File.Exists(outputPath))
+                        {
+                            string uniqueName =
+                                $"{hash}_{i:D6}.bin";
+
+                            outputPath = Path.Combine(
+                                outputDir,
+                                uniqueName);
+                        }
+
+                        File.WriteAllBytes(outputPath, bytes);
+
+                        actualOutputSize = bytes.Length;
+                        succeeded++;
+                    }
+                    catch (Exception ex)
+                    {
+                        status = "Failed";
+                        error =
+                            $"{ex.GetType().Name}: {ex.Message}";
+
+                        failed++;
+                    }
+
+                    manifestEntries.Add(new
+                    {
+                        Index = i,
+                        Hash = hash,
+                        FileOffset = entry.FileOffset,
+                        PaddedFileSize = entry.PaddedFileSize,
+                        UnpaddedFileSize = entry.UnpaddedFileSize,
+                        AesMetadataPresent = entry.AESKey != null,
+                        AesRangeCount =
+                            entry.AESKey?.Ranges.Count ?? 0,
+                        ActualOutputSize = actualOutputSize,
+                        OutputFile = status == "Success"
+                            ? Path.GetFileName(outputPath)
+                            : null,
+                        Status = status,
+                        Error = error
+                    });
+
+                    // Keep console output manageable for large archives.
+                    if ((i + 1) % 1000 == 0 ||
+                        i + 1 == entries.Count)
+                    {
+                        Console.WriteLine(
+                            $"Progress: {i + 1:N0}/{entries.Count:N0} | " +
+                            $"Succeeded: {succeeded:N0} | " +
+                            $"Failed: {failed:N0}");
+                    }
+                }
+            }
+
+            var manifest = new
+            {
+                Archive = archive,
+                BhdPath = bhdPath,
+                BdtPath = bdtPath,
+                OutputDirectory = outputDir,
+                TotalEntries = entries.Count,
+                Succeeded = succeeded,
+                Failed = failed,
+                Entries = manifestEntries
+            };
+
+            File.WriteAllText(
+                manifestPath,
+                JsonSerializer.Serialize(
+                    manifest,
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    }));
+
+            Console.WriteLine();
+            Console.WriteLine("Full archive extraction completed.");
+            Console.WriteLine($"Archive: {archive}");
+            Console.WriteLine($"Total entries: {entries.Count:N0}");
+            Console.WriteLine($"Succeeded: {succeeded:N0}");
+            Console.WriteLine($"Failed: {failed:N0}");
+            Console.WriteLine($"Output directory: {outputDir}");
+            Console.WriteLine($"Manifest: {manifestPath}");
+
+            return failed == 0 ? 0 : 1;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(
+                "Full archive extraction failed:");
+
+            PrintExceptionDetails(ex);
 
             return 1;
         }
@@ -406,6 +652,7 @@ internal static class Program
         {
             Console.Error.WriteLine(
                 $"Input file not found: {inputPath}");
+
             return 2;
         }
 
@@ -416,7 +663,8 @@ internal static class Program
             byte[] dcxBytes = File.ReadAllBytes(inputPath);
 
             Console.WriteLine($"Input: {inputPath}");
-            Console.WriteLine($"Input size: {dcxBytes.Length:N0} bytes");
+            Console.WriteLine(
+                $"Input size: {dcxBytes.Length:N0} bytes");
 
             if (!DCX.Is(dcxBytes))
             {
@@ -426,10 +674,9 @@ internal static class Program
                 return 1;
             }
 
-			// Actual SoulsFormatsNEXT API from DCX.cs.
-			byte[] tpfBytes = DCX.Decompress(
-			    dcxBytes,
-			    out DCX.CompressionInfo compression);
+            byte[] tpfBytes = DCX.Decompress(
+                dcxBytes,
+                out DCX.CompressionInfo compression);
 
             Console.WriteLine(
                 $"DCX compression type: {compression.Type}");
@@ -437,15 +684,19 @@ internal static class Program
             Console.WriteLine(
                 $"Decompressed size: {tpfBytes.Length:N0} bytes");
 
-            // Verify the decompressed file is a TPF.
             if (tpfBytes.Length < 4 ||
-                Encoding.ASCII.GetString(tpfBytes, 0, 4) != "TPF\0")
+                Encoding.ASCII.GetString(
+                    tpfBytes,
+                    0,
+                    4) != "TPF\0")
             {
                 string unexpectedPath = Path.Combine(
                     outputDir,
                     "decompressed.bin");
 
-                File.WriteAllBytes(unexpectedPath, tpfBytes);
+                File.WriteAllBytes(
+                    unexpectedPath,
+                    tpfBytes);
 
                 Console.Error.WriteLine(
                     "DCX decompression completed, but the output " +
@@ -455,7 +706,9 @@ internal static class Program
                     $"Output saved for inspection: {unexpectedPath}");
 
                 Console.Error.WriteLine(
-                    $"First 16 bytes: {Convert.ToHexString(tpfBytes.Take(16).ToArray())}");
+                    "First 16 bytes: " +
+                    Convert.ToHexString(
+                        tpfBytes.Take(16).ToArray()));
 
                 return 1;
             }
@@ -466,7 +719,6 @@ internal static class Program
 
             File.WriteAllBytes(tpfPath, tpfBytes);
 
-            // Actual SoulsFormatsNEXT TPF reader.
             TPF tpf = TPF.Read(tpfBytes);
 
             string textureDir = Path.Combine(
@@ -482,16 +734,13 @@ internal static class Program
 
             foreach (TPF.Texture texture in tpf.Textures)
             {
-                string safeName = MakeSafeFileName(texture.Name);
+                string safeName =
+                    MakeSafeFileName(texture.Name);
 
-                // Headerize converts supported texture payloads into a
-                // standard DDS file, including rebuilding platform-specific
-                // layouts where Headerizer supports them. Some payloads are
-                // already DDS/GNF/XTX; Headerizer identifies those too.
                 byte[] outputBytes;
                 string extension;
                 bool headerized;
-                string headerizeError = null;
+                string? headerizeError = null;
 
                 try
                 {
@@ -503,8 +752,6 @@ internal static class Program
                 }
                 catch (Exception ex)
                 {
-                    // Do not abort the entire TPF because one texture is
-                    // unsupported or malformed. Preserve its original bytes.
                     outputBytes = texture.Bytes;
                     extension = ".bin";
                     headerized = false;
@@ -513,9 +760,7 @@ internal static class Program
                         $"{ex.GetType().Name}: {ex.Message}";
                 }
 
-                // Parse the DDS header directly instead of relying on
-                // texture.Header, which may be null for these textures.
-                DdsInfo ddsInfo = null;
+                DdsInfo? ddsInfo = null;
 
                 if (extension.Equals(
                         ".dds",
@@ -531,7 +776,9 @@ internal static class Program
                     textureDir,
                     fileName);
 
-                File.WriteAllBytes(texturePath, outputBytes);
+                File.WriteAllBytes(
+                    texturePath,
+                    outputBytes);
 
                 textureReports.Add(new
                 {
@@ -554,7 +801,6 @@ internal static class Program
                     Mipmaps = texture.Mipmaps,
                     Flags1 = texture.Flags1,
 
-                    // Metadata parsed from the generated DDS file.
                     Width = ddsInfo?.Width,
                     Height = ddsInfo?.Height,
                     MipMapCount = ddsInfo?.MipMapCount,
@@ -562,16 +808,21 @@ internal static class Program
                     DXGIFormat = ddsInfo?.DxgiFormat,
                     FormatName = ddsInfo?.FormatName,
 
-                    DdsHeaderValid = ddsInfo?.IsValid ?? false,
+                    DdsHeaderValid =
+                        ddsInfo?.IsValid ?? false,
+
                     DdsValidationMessage =
                         ddsInfo?.ValidationMessage,
 
-                    // Preserve the previous SoulsFormats header fields
-                    // as supplemental information for comparison.
-                    SourceHeaderWidth = texture.Header?.Width,
-                    SourceHeaderHeight = texture.Header?.Height,
+                    SourceHeaderWidth =
+                        texture.Header?.Width,
+
+                    SourceHeaderHeight =
+                        texture.Header?.Height,
+
                     SourceHeaderTextureCount =
                         texture.Header?.TextureCount,
+
                     SourceHeaderDXGIFormat =
                         texture.Header?.DXGIFormat
                 });
@@ -640,19 +891,22 @@ internal static class Program
             Console.WriteLine();
             Console.WriteLine("TPF extraction completed.");
             Console.WriteLine($"TPF: {tpfPath}");
-            Console.WriteLine($"Texture count: {tpf.Textures.Count}");
+            Console.WriteLine(
+                $"Texture count: {tpf.Textures.Count}");
             Console.WriteLine($"Textures: {textureDir}");
             Console.WriteLine($"Report: {reportPath}");
 
             return 0;
         }
         catch (Exception ex)
-		{
-		    Console.Error.WriteLine("TPF extraction failed:");
-		    PrintExceptionDetails(ex);
+        {
+            Console.Error.WriteLine(
+                "TPF extraction failed:");
 
-		    return 1;
-		}
+            PrintExceptionDetails(ex);
+
+            return 1;
+        }
     }
 
     // ------------------------------------------------------------
@@ -679,11 +933,11 @@ internal static class Program
 
         public int? MipMapCount { get; set; }
 
-        public string FourCC { get; set; }
+        public string? FourCC { get; set; }
 
         public uint? DxgiFormat { get; set; }
 
-        public string FormatName { get; set; }
+        public string? FormatName { get; set; }
     }
 
     private static DdsInfo ParseDds(byte[] data)
@@ -698,7 +952,6 @@ internal static class Program
             return info;
         }
 
-        // DDS magic.
         if (data[0] != (byte)'D' ||
             data[1] != (byte)'D' ||
             data[2] != (byte)'S' ||
@@ -754,7 +1007,8 @@ internal static class Program
             return info;
         }
 
-        if (width > int.MaxValue || height > int.MaxValue)
+        if (width > int.MaxValue ||
+            height > int.MaxValue)
         {
             info.ValidationMessage =
                 "DDS dimensions exceed supported integer range.";
@@ -781,11 +1035,11 @@ internal static class Program
 
             if (info.FourCC == "DX10")
             {
-                // DDS_HEADER_DXT10 is 20 bytes and begins at offset 128.
                 if (data.Length < 148)
                 {
                     info.ValidationMessage =
-                        "DDS uses DX10 format but its extended header is incomplete.";
+                        "DDS uses DX10 format but its extended " +
+                        "header is incomplete.";
 
                     return info;
                 }
@@ -795,7 +1049,8 @@ internal static class Program
                         data.AsSpan(128, 4));
 
                 info.DxgiFormat = dxgiFormat;
-                info.FormatName = GetDxgiFormatName(dxgiFormat);
+                info.FormatName =
+                    GetDxgiFormatName(dxgiFormat);
             }
             else
             {
@@ -871,7 +1126,9 @@ internal static class Program
     // Shared BHD loading logic
     // ------------------------------------------------------------
 
-    private static BHD5 LoadBhd(string bhdPath, string key)
+    private static BHD5 LoadBhd(
+        string bhdPath,
+        string key)
     {
         byte[] magic = new byte[4];
 
@@ -890,7 +1147,9 @@ internal static class Program
         if (encrypted)
         {
             using var decrypted =
-                CryptographyUtility.DecryptRsa(bhdPath, key);
+                CryptographyUtility.DecryptRsa(
+                    bhdPath,
+                    key);
 
             return BHD5.Read(
                 decrypted,
@@ -904,6 +1163,7 @@ internal static class Program
 
     // ------------------------------------------------------------
     // Hash parsing
+    //
     // Accepts:
     // F92A250B
     // 0xF92A250B
@@ -914,7 +1174,8 @@ internal static class Program
         out ulong hash)
     {
         string normalized = hashText.StartsWith(
-            "0x", StringComparison.OrdinalIgnoreCase)
+            "0x",
+            StringComparison.OrdinalIgnoreCase)
                 ? hashText[2..]
                 : hashText;
 
@@ -932,13 +1193,18 @@ internal static class Program
     private static string MakeSafeFileName(string name)
     {
         if (string.IsNullOrWhiteSpace(name))
+        {
             return "unnamed";
+        }
 
-        char[] invalidChars = Path.GetInvalidFileNameChars();
+        char[] invalidChars =
+            Path.GetInvalidFileNameChars();
 
         string safe = new string(
             name.Select(c =>
-                invalidChars.Contains(c) || c == '/' || c == '\\'
+                invalidChars.Contains(c) ||
+                c == '/' ||
+                c == '\\'
                     ? '_'
                     : c)
             .ToArray());
@@ -968,15 +1234,27 @@ internal static class Program
             "<DataN.bdt> <hash> <outputDir>");
         Console.WriteLine();
 
+        Console.WriteLine("Full archive extraction:");
+        Console.WriteLine(
+            "  dotnet run -- --extract-all <DataN.bhd> " +
+            "<DataN.bdt> <outputDir>");
+        Console.WriteLine();
+
         Console.WriteLine("DCX -> TPF -> texture extraction:");
         Console.WriteLine(
-            "  dotnet run -- --extract-tpf <decrypted.bin> <outputDir>");
+            "  dotnet run -- --extract-tpf " +
+            "<decrypted.bin> <outputDir>");
         Console.WriteLine();
 
         Console.WriteLine("Examples:");
         Console.WriteLine(
             "  dotnet run -- --extract Data2.bhd Data2.bdt " +
             "0xF92A250B output");
+        Console.WriteLine();
+
+        Console.WriteLine(
+            "  dotnet run -- --extract-all " +
+            "Data2.bhd Data2.bdt output/Data2");
         Console.WriteLine();
 
         Console.WriteLine(
