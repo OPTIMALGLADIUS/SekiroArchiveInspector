@@ -2,7 +2,6 @@ using SekiroArchiveInspector.Archive;
 using SekiroArchiveInspector.Configuration;
 using SekiroArchiveInspector.Extraction;
 using SekiroArchiveInspector.Reporting;
-using SekiroArchiveInspector.Processing;
 using SekiroArchiveInspector.Utilities;
 
 internal static class Program
@@ -49,9 +48,6 @@ internal static class Program
                         args[2]);
 
                     return 0;
-
-                case "--process-all":
-                    return await RunProcessAll(args);
 
                 default:
                     // Preserve the original TSV mapping mode.
