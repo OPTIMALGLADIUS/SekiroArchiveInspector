@@ -1,3 +1,4 @@
+
 using SekiroArchiveInspector.Archive;
 using SekiroArchiveInspector.Configuration;
 using SekiroArchiveInspector.Extraction;
@@ -43,6 +44,12 @@ internal static class Program
                     return ArchiveExtractor.RunAll(args);
 
                 case "--classify-all":
+                    if (args.Length != 3)
+                    {
+                        PrintUsage();
+                        return 2;
+                    }
+
                     ClassificationReport.ScanDirectory(
                         args[1],
                         args[2]);
@@ -63,35 +70,6 @@ internal static class Program
 
             return 1;
         }
-    }
-
-    private static async Task<int> RunProcessAll(
-        string[] args)
-    {
-        if (args.Length != 3)
-        {
-            PrintUsage();
-            return 2;
-        }
-
-        string inputDirectory =
-            Path.GetFullPath(args[1]);
-
-        string outputDirectory =
-            Path.GetFullPath(args[2]);
-
-        var pipeline = new ProcessingPipeline(
-        [
-            new DcxProcessor(),
-            new TpfProcessor(),
-            new BinderProcessor()
-        ]);
-
-        await pipeline.ProcessDirectoryAsync(
-            inputDirectory,
-            outputDirectory);
-
-        return 0;
     }
 
     private static void PrintUsage()
@@ -117,9 +95,5 @@ internal static class Program
         Console.WriteLine(
             "Classify: --classify-all " +
             "<inputDir> <output.csv>");
-
-        Console.WriteLine(
-            "Process: --process-all " +
-            "<inputDir> <outputDir>");
     }
 }
