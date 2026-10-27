@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -18,15 +19,20 @@ public static class ArchiveExtractor
         public string BhdPath { get; set; } = "";
         public string BdtPath { get; set; } = "";
         public string OutputDirectory { get; set; } = "";
+
         public DateTimeOffset StartedAtUtc { get; set; }
         public DateTimeOffset CompletedAtUtc { get; set; }
         public double DurationSeconds { get; set; }
+
         public int TotalEntries { get; set; }
         public int Succeeded { get; set; }
         public int Failed { get; set; }
         public string Status { get; set; } = "";
+
         public string RankingDescription { get; set; } =
-            "Heuristic priority for follow-up analysis; not a measure of gameplay importance.";
+            "Heuristic signature-based priority for follow-up analysis; " +
+            "not a measure of gameplay importance or file validity.";
+
         public List<ExtractionEntryReport> Entries { get; set; } = new();
         public List<ExtractionEntryReport> PriorityRanking { get; set; } = new();
     }
@@ -34,15 +40,32 @@ public static class ArchiveExtractor
     private sealed class ExtractionEntryReport
     {
         public int EntryIndex { get; set; }
+
+        // Preserve all 16 hexadecimal digits, including leading zeroes.
         public string Hash { get; set; } = "";
+
         public string OutputFile { get; set; } = "";
         public bool Success { get; set; }
         public long? OutputSizeBytes { get; set; }
+
+        // Metadata from BHD5.FileHeader.
+        public long BdtFileOffset { get; set; }
+        public int PaddedFileSize { get; set; }
+        public long UnpaddedFileSize { get; set; }
+        public bool HasAesKey { get; set; }
+        public bool HasShaHash { get; set; }
+
+        // Content classification.
         public string Category { get; set; } = "Unknown";
         public string DetectedType { get; set; } = "Not classified";
         public string ClassificationConfidence { get; set; } = "None";
         public int PriorityScore { get; set; }
         public string ClassificationReason { get; set; } = "";
+
+        // Diagnostic data from ContentClassifier.
+        public string HeaderHex { get; set; } = "";
+        public double? EntropyBitsPerByte { get; set; }
+
         public string? Error { get; set; }
     }
 
@@ -106,6 +129,7 @@ public static class ArchiveExtractor
         };
 
         var timer = Stopwatch.StartNew();
+        int exitCode = 1;
 
         try
         {
@@ -118,7 +142,7 @@ public static class ArchiveExtractor
 
             BHD5 archive = BhdLoader.Load(bhdPath, archiveKey);
 
-            var entries = archive.Buckets
+            List<BHD5.FileHeader> entries = archive.Buckets
                 .SelectMany(bucket => bucket)
                 .ToList();
 
@@ -127,6 +151,7 @@ public static class ArchiveExtractor
             if (entries.Count == 0)
             {
                 report.Status = "NoEntries";
+
                 Console.Error.WriteLine(
                     "The archive index contains no entries.");
 
@@ -136,13 +161,16 @@ public static class ArchiveExtractor
             Console.WriteLine(
                 $"Archive contains {entries.Count} entries.");
 
-            using FileStream bdtStream = File.OpenRead(bdtPath);
+            using FileStream bdtStream = new(
+                bdtPath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.Read);
 
             for (int i = 0; i < entries.Count; i++)
             {
                 BHD5.FileHeader entry = entries[i];
 
-                // Keep the original 16-digit hexadecimal representation.
                 string hashName = entry.FileNameHash.ToString("X16");
                 string outputPath = Path.Combine(
                     outputDirectory, $"{hashName}.bin");
@@ -151,14 +179,19 @@ public static class ArchiveExtractor
                 {
                     EntryIndex = i,
                     Hash = hashName,
-                    OutputFile = outputPath
+                    OutputFile = outputPath,
+
+                    BdtFileOffset = entry.FileOffset,
+                    PaddedFileSize = entry.PaddedFileSize,
+                    UnpaddedFileSize = entry.UnpaddedFileSize,
+                    HasAesKey = entry.AESKey != null,
+                    HasShaHash = entry.SHAHash != null
                 };
 
                 try
                 {
-                    byte[] data = entry.ReadFile(bdtStream);
+                    byte[] data = ReadEntrySafely(entry, bdtStream);
 
-                    // Classify the actual extracted bytes.
                     ContentClassification classification =
                         ContentClassifier.Classify(data);
 
@@ -166,11 +199,15 @@ public static class ArchiveExtractor
 
                     item.Success = true;
                     item.OutputSizeBytes = data.LongLength;
+
                     item.Category = classification.Category;
                     item.DetectedType = classification.DetectedType;
                     item.ClassificationConfidence = classification.Confidence;
                     item.PriorityScore = classification.PriorityScore;
                     item.ClassificationReason = classification.Reason;
+                    item.HeaderHex = classification.HeaderHex;
+                    item.EntropyBitsPerByte =
+                        classification.EntropyBitsPerByte;
 
                     report.Succeeded++;
                 }
@@ -208,7 +245,7 @@ public static class ArchiveExtractor
                 ? "Completed"
                 : "CompletedWithErrors";
 
-            return report.Failed == 0 ? 0 : 1;
+            exitCode = report.Failed == 0 ? 0 : 1;
         }
         catch (Exception ex)
         {
@@ -219,8 +256,7 @@ public static class ArchiveExtractor
                 $"Archive extraction failed: {ex.GetType().Name}: {ex.Message}");
 
             ExceptionUtility.PrintExceptionDetails(ex);
-
-            return 1;
+            exitCode = 1;
         }
         finally
         {
@@ -229,7 +265,6 @@ public static class ArchiveExtractor
             report.CompletedAtUtc = DateTimeOffset.UtcNow;
             report.DurationSeconds = timer.Elapsed.TotalSeconds;
 
-            // Best-effort report writing, including after a fatal error.
             try
             {
                 string json = JsonSerializer.Serialize(
@@ -248,15 +283,59 @@ public static class ArchiveExtractor
                 Console.WriteLine($"Total entries : {report.TotalEntries}");
                 Console.WriteLine($"Succeeded     : {report.Succeeded}");
                 Console.WriteLine($"Failed        : {report.Failed}");
-                Console.WriteLine($"Duration      : {report.DurationSeconds:F2} seconds");
+                Console.WriteLine(
+                    $"Duration      : {report.DurationSeconds:F2} seconds");
                 Console.WriteLine($"Report        : {reportPath}");
                 Console.WriteLine("========================================");
             }
             catch (Exception reportException)
             {
                 Console.Error.WriteLine(
-                    $"Could not write extraction report: {reportException.Message}");
+                    $"Could not write extraction report: " +
+                    $"{reportException.Message}");
+
+                if (exitCode == 0)
+                    exitCode = 1;
             }
         }
+
+        return exitCode;
+    }
+
+    private static byte[] ReadEntrySafely(
+        BHD5.FileHeader entry,
+        FileStream bdtStream)
+    {
+        if (entry.FileOffset < 0)
+        {
+            throw new InvalidDataException(
+                $"Negative BDT offset: {entry.FileOffset}.");
+        }
+
+        if (entry.PaddedFileSize < 0)
+        {
+            throw new InvalidDataException(
+                $"Negative padded file size: {entry.PaddedFileSize}.");
+        }
+
+        if (entry.FileOffset > bdtStream.Length ||
+            entry.PaddedFileSize > bdtStream.Length - entry.FileOffset)
+        {
+            throw new InvalidDataException(
+                $"Entry extends beyond the BDT file. " +
+                $"Offset={entry.FileOffset}, " +
+                $"Size={entry.PaddedFileSize}, " +
+                $"BDT length={bdtStream.Length}.");
+        }
+
+        byte[] data = new byte[entry.PaddedFileSize];
+
+        bdtStream.Position = entry.FileOffset;
+        bdtStream.ReadExactly(data);
+
+        // Match SoulsFormats BHD5.FileHeader.ReadFile behavior.
+        entry.AESKey?.Decrypt(data);
+
+        return data;
     }
 }
