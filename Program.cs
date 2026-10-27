@@ -1,4 +1,4 @@
-
+using SekiroArchiveInspector.Analysis;
 using SekiroArchiveInspector.Archive;
 using SekiroArchiveInspector.Configuration;
 using SekiroArchiveInspector.Extraction;
@@ -56,6 +56,9 @@ internal static class Program
 
                     return 0;
 
+                case "--analyze-payloads":
+				    return PayloadAnalyzer.Run(args);
+
                 default:
                     // Preserve the original TSV mapping mode.
                     return ArchiveMapper.Run(args);
@@ -95,5 +98,9 @@ internal static class Program
         Console.WriteLine(
             "Classify: --classify-all " +
             "<inputDir> <output.csv>");
+
+        Console.WriteLine(
+		    "Analyze all BIN payloads: --analyze-payloads " +
+		    "<inputDir> <outputDir>");
     }
 }
