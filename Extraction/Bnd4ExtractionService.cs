@@ -104,20 +104,26 @@ public static class Bnd4ExtractionService
 					        .Select(b => b >= 32 && b <= 126 ? (char)b : '.')
 					        .ToArray());
 
+					if (bytes.Length >= 4 &&
+					    System.Text.Encoding.ASCII.GetString(bytes, 0, 4) == "TPF\0")
+{
+    // Valid texture package, but not a BND4 binder.
+					    archiveReport.Status = "SkippedNonBND4";
+					    archiveReport.Error =
+					        "Detected TPF texture package; process with --extract-tpf.";
+
+					    Console.WriteLine(
+					        $"SKIPPED (TPF): {relative} -> use --extract-tpf");
+
+					    report.Archives.Add(archiveReport);
+					    continue;
+					}
+
                     if (bytes.Length < 4 ||
-                        System.Text.Encoding.ASCII.GetString(bytes, 0, 4)
-                            != "BND4")
+                        System.Text.Encoding.ASCII.GetString(bytes, 0, 4) != "BND4")
                     {
-                        Console.Error.WriteLine();
-					    Console.Error.WriteLine("====== NON-BND4 PAYLOAD ======");
-					    Console.Error.WriteLine($"File: {relative}");
-					    Console.Error.WriteLine($"Size: {bytes.Length} bytes");
-					    Console.Error.WriteLine($"Header hex: {headerHex}");
-					    Console.Error.WriteLine($"Header ASCII: {headerAscii}");
-					    Console.Error.WriteLine("==============================");
-					    
                         throw new InvalidDataException(
-                            "Payload does not begin with the BND4 signature.");
+                            $"Unsupported payload signature: " + $"{Convert.ToHexString(bytes.AsSpan(0, Math.Min(bytes.Length, 16)))}");
                     }
 
                     BND4 binder = BND4.Read(bytes);
