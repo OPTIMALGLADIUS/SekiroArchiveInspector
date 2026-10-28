@@ -59,6 +59,9 @@ internal static class Program
                 case "--analyze-payloads":
 				    return PayloadAnalyzer.Run(args);
 
+				case "--extract-bnd4":
+				    return Bnd4ExtractionService.Run(args);
+
                 default:
                     // Preserve the original TSV mapping mode.
                     return ArchiveMapper.Run(args);
@@ -102,5 +105,8 @@ internal static class Program
         Console.WriteLine(
 		    "Analyze all BIN payloads: --analyze-payloads " +
 		    "<inputDir> <outputDir>");
+
+		Console.WriteLine(
+		    "Extract BND4 bundles: --extract-bnd4 <inputDir> <outputDir>");
     }
 }
