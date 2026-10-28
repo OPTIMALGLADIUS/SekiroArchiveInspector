@@ -97,10 +97,25 @@ public static class Bnd4ExtractionService
                 {
                     byte[] bytes = File.ReadAllBytes(path);
 
+                    string headerHex = Convert.ToHexString(
+					    bytes.AsSpan(0, Math.Min(bytes.Length, 64)));
+					string headerAscii = new string(
+					    bytes.Take(Math.Min(bytes.Length, 64))
+					        .Select(b => b >= 32 && b <= 126 ? (char)b : '.')
+					        .ToArray());
+
                     if (bytes.Length < 4 ||
                         System.Text.Encoding.ASCII.GetString(bytes, 0, 4)
                             != "BND4")
                     {
+                        Console.Error.WriteLine();
+					    Console.Error.WriteLine("====== NON-BND4 PAYLOAD ======");
+					    Console.Error.WriteLine($"File: {relative}");
+					    Console.Error.WriteLine($"Size: {bytes.Length} bytes");
+					    Console.Error.WriteLine($"Header hex: {headerHex}");
+					    Console.Error.WriteLine($"Header ASCII: {headerAscii}");
+					    Console.Error.WriteLine("==============================");
+					    
                         throw new InvalidDataException(
                             "Payload does not begin with the BND4 signature.");
                     }
