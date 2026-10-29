@@ -62,6 +62,12 @@ internal static class Program
 				case "--extract-bnd4":
 				    return Bnd4ExtractionService.Run(args);
 
+				case "--extract-recursive":
+				    return RecursiveExtractionService.Run(args);
+
+				case "--inventory":
+				    return AssetInventoryService.Run(args);
+
                 default:
                     // Preserve the original TSV mapping mode.
                     return ArchiveMapper.Run(args);
@@ -108,5 +114,11 @@ internal static class Program
 
 		Console.WriteLine(
 		    "Extract BND4 bundles: --extract-bnd4 <inputDir> <outputDir>");
+
+		Console.WriteLine(
+		    "Recursive extraction: --extract-recursive <inputDir> <outputDir>");
+
+		Console.WriteLine(
+		    "Inventory assets: --inventory <inputDir> <outputDir>");
     }
 }
